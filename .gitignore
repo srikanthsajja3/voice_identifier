@@ -1,0 +1,20 @@
+# Large Data (Do not push to GitHub)
+data/
+static/uploads/*
+!static/uploads/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.env
+
+# Models & Results
+# models/*.h5  <-- Uncomment if your .h5 file is > 100MB
+results/*.png
+results/*.wav
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Urban Noise XAI Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 20px; }
+        .container { max-width: 1000px; margin: auto; }
+        .header { text-align: center; padding-bottom: 40px; }
+        .header h1 { color: #38bdf8; margin-bottom: 5px; }
+        .header p { color: #94a3b8; }
+        
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .card { background: #1e293b; padding: 20px; border-radius: 12px; border: 1px solid #334155; }
+        
+        button { background: #38bdf8; color: #0f172a; border: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; cursor: pointer; width: 100%; margin-bottom: 10px; }
+        button:disabled { background: #475569; }
+        
+        #result-area { text-align: center; }
+        #explanation-img { max-width: 100%; border-radius: 8px; margin-top: 15px; border: 1px solid #334155; display: none; }
+        
+        .trend-item { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #334155; }
+        .trend-val { color: #fb7185; font-weight: bold; }
+        #recording-status { color: #fb7185; font-size: 0.9em; margin-top: 10px; display: none; text-align: center;}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Urban Noise Intelligence</h1>
+            <p>Classifying sources with Explainable AI & Trend Estimation</p>
+        </div>
+
+        <div class="grid">
+            <div class="card">
+                <h3>Record Audio</h3>
+                <button id="recordBtn">Start Recording (4s)</button>
+                <div id="recording-status">🔴 Recording... Please make some noise.</div>
+                
+                <hr style="border: 0.5px solid #334155; margin: 20px 0;">
+                
+                <div id="result-area">
+                    <h3>Classification Result</h3>
+                    <div id="prediction-text" style="font-size: 1.5em; color: #38bdf8;">---</div>
+                    <div id="confidence-text" style="color: #94a3b8;">Confidence: 0%</div>
+                    <img id="explanation-img" src="" alt="XAI Explanation Heatmap">
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>Future Noise Trend Estimation</h3>
+                <p style="font-size: 0.8em; color: #94a3b8; margin-bottom: 15px;">Estimated increase in noise levels for the next 30 days.</p>
+                <div id="trend-list"></div>
+                <canvas id="trendChart" style="margin-top: 20px;"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let audioContext;
+        let recorder;
+        let chart;
+
+        const recordBtn = document.getElementById('recordBtn');
+        const status = document.getElementById('recording-status');
+
+        recordBtn.onclick = async () => {
+            recordBtn.disabled = true;
+            status.style.display = 'block';
+            
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 22050 });
+            const source = audioContext.createMediaStreamSource(stream);
+            const processor = audioContext.createScriptProcessor(4096, 1, 1);
+
+            let samples = [];
+            processor.onaudioprocess = (e) => {
+                samples.push(...e.inputBuffer.getChannelData(0));
+            };
+
+            source.connect(processor);
+            processor.connect(audioContext.destination);
+
+            setTimeout(async () => {
+                source.disconnect();
+                processor.disconnect();
+                status.style.display = 'none';
+                recordBtn.disabled = false;
+                
+                const wavBlob = encodeWAV(samples, 22050);
+                uploadAudio(wavBlob);
+            }, 4000);
+        };
+
+        function encodeWAV(samples, sampleRate) {
+            const buffer = new ArrayBuffer(44 + samples.length * 2);
+            const view = new DataView(buffer);
+
+            const writeString = (offset, string) => {
+                for (let i = 0; i < string.length; i++) {
+                    view.setUint8(offset + i, string.charCodeAt(i));
+                }
+            };
+
+            writeString(0, 'RIFF');
+            view.setUint32(4, 32 + samples.length * 2, true);
+            writeString(8, 'WAVE');
+            writeString(12, 'fmt ');
+            view.setUint32(16, 16, true);
+            view.setUint16(20, 1, true);
+            view.setUint16(22, 1, true);
+            view.setUint32(24, sampleRate, true);
+            view.setUint32(28, sampleRate * 2, true);
+            view.setUint16(32, 2, true);
+            view.setUint16(34, 16, true);
+            writeString(36, 'data');
+            view.setUint32(40, samples.length * 2, true);
+
+            let offset = 44;
+            for (let i = 0; i < samples.length; i++, offset += 2) {
+                let s = Math.max(-1, Math.min(1, samples[i]));
+                view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+            }
+
+            return new Blob([view], { type: 'audio/wav' });
+        }
+
+        async function uploadAudio(blob) {
+            const formData = new FormData();
+            formData.append('audio', blob, 'recording.wav');
+
+            const response = await fetch('/predict', { method: 'POST', body: formData });
+            const data = await response.json();
+            
+            document.getElementById('prediction-text').innerText = data.prediction;
+            document.getElementById('confidence-text').innerText = `Confidence: ${data.confidence}%`;
+            const img = document.getElementById('explanation-img');
+            img.src = data.explanation_url;
+            img.style.display = 'block';
+
+            updateTrends(data.trends);
+        }
+
+        function updateTrends(trends) {
+            const list = document.getElementById('trend-list');
+            list.innerHTML = '';
+            trends.sort((a,b) => b.value - a.value).slice(0, 5).forEach(item => {
+                list.innerHTML += `<div class="trend-item"><span>${item.label}</span><span class="trend-val">+${item.value}%</span></div>`;
+            });
+
+            const ctx = document.getElementById('trendChart').getContext('2d');
+            if (chart) chart.destroy();
+            chart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: trends.map(t => t.label),
+                    datasets: [{ label: '% Expected Increase', data: trends.map(t => t.value), backgroundColor: '#38bdf8' }]
+                },
+                options: { scales: { y: { beginAtZero: true, grid: { color: '#334155' } } } }
+            });
+        }
+    </script>
+</body>
+</html>
