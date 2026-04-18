@@ -36,9 +36,16 @@
 
         <div class="grid">
             <div class="card">
-                <h3>Record Audio</h3>
+                <h3>Audio Input</h3>
                 <button id="recordBtn">Start Recording (4s)</button>
                 <div id="recording-status">🔴 Recording... Please make some noise.</div>
+                
+                <div style="margin: 15px 0; text-align: center; color: #94a3b8; font-size: 0.8em;">OR</div>
+                
+                <div style="background: #0f172a; padding: 15px; border-radius: 8px; border: 1px dashed #334155;">
+                    <p style="margin-top: 0; font-size: 0.9em; margin-bottom: 10px;">Upload an audio file (.wav, .mp3, .m4a)</p>
+                    <input type="file" id="audioUpload" accept="audio/*" style="font-size: 0.8em; width: 100%;">
+                </div>
                 
                 <hr style="border: 0.5px solid #334155; margin: 20px 0;">
                 
@@ -66,6 +73,13 @@
 
         const recordBtn = document.getElementById('recordBtn');
         const status = document.getElementById('recording-status');
+        const audioUpload = document.getElementById('audioUpload');
+
+        audioUpload.onchange = (e) => {
+            if (e.target.files.length > 0) {
+                uploadAudio(e.target.files[0]);
+            }
+        };
 
         recordBtn.onclick = async () => {
             recordBtn.disabled = true;
@@ -129,6 +143,7 @@
         }
 
         async function uploadAudio(blob) {
+            document.getElementById('prediction-text').innerText = "Processing...";
             const formData = new FormData();
             formData.append('audio', blob, 'recording.wav');
 
