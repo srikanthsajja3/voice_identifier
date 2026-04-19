@@ -1,5 +1,29 @@
 import librosa
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+import librosa.display
+
+def save_waveform(file_path, output_path):
+    """Generates and saves the waveform (time-domain) image."""
+    audio, sr = librosa.load(file_path, duration=4, sr=22050)
+    plt.figure(figsize=(10, 2))
+    plt.plot(np.linspace(0, len(audio)/sr, len(audio)), audio, color='#38bdf8')
+    plt.title("Audio Waveform")
+    plt.axis('off')
+    plt.savefig(output_path, transparent=True, bbox_inches='tight', pad_inches=0)
+    plt.close()
+
+def save_mfcc(file_path, output_path):
+    """Generates and saves the MFCC (texture) image."""
+    audio, sr = librosa.load(file_path, duration=4, sr=22050)
+    mfccs = librosa.feature.mfcc(y=audio, sr=sr, n_mfcc=13)
+    plt.figure(figsize=(10, 2))
+    librosa.display.specshow(mfccs, sr=sr, x_axis='time')
+    plt.axis('off')
+    plt.savefig(output_path, transparent=True, bbox_inches='tight', pad_inches=0)
+    plt.close()
 
 def load_and_preprocess(file_path, duration=4, sr=22050):
     """

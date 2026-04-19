@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Model Performance - Urban Noise XAI</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 20px; }
+        .container { max-width: 1200px; margin: auto; }
+        .header { text-align: center; padding-bottom: 40px; position: relative; }
+        .header h1 { color: #38bdf8; margin-bottom: 5px; }
+        .back-link { position: absolute; left: 0; top: 10px; color: #38bdf8; text-decoration: none; font-weight: 600; }
+        
+        .card { background: #1e293b; padding: 30px; border-radius: 12px; border: 1px solid #334155; margin-bottom: 30px; }
+        h3 { color: #38bdf8; margin-top: 0; }
+        .metrics-img { max-width: 100%; border-radius: 8px; border: 1px solid #334155; margin-top: 20px; display: block; margin-left: auto; margin-right: auto; }
+        .placeholder { padding: 50px; text-align: center; color: #94a3b8; border: 1px dashed #334155; border-radius: 8px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <a href="/" class="back-link">← Dashboard</a>
+            <h1>Model Performance Metrics</h1>
+            <p>Evaluating accuracy and explainability of the CNN model</p>
+        </div>
+
+        <div class="card">
+            <h3>Training History</h3>
+            <p>Accuracy and Loss curves from the last training session.</p>
+            <img src="/results/training_metrics.png" class="metrics-img" alt="Training Metrics">
+        </div>
+
+        <div class="card">
+            <h3>Confusion Matrix</h3>
+            <p>This matrix shows how many samples of each class were correctly predicted versus confused with other classes.</p>
+            {% if cm_exists %}
+                <img src="{{ cm_url }}" class="metrics-img" alt="Confusion Matrix">
+            {% else %}
+                <div class="placeholder">Confusion matrix image not found. Run evaluation to generate it.</div>
+            {% endif %}
+        </div>
+
+        <div class="card">
+            <h3>CNN Heatmap Matrix (Explainability)</h3>
+            <p>This grid displays a Grad-CAM heatmap for each class, showing where the CNN is focusing its attention to make predictions.</p>
+            {% if xai_exists %}
+                <img src="{{ xai_url }}" class="metrics-img" alt="XAI Heatmap Matrix">
+            {% else %}
+                <div class="placeholder">XAI heatmap matrix image not found. Run the grid generator to create it.</div>
+            {% endif %}
+        </div>
+    </div>
+</body>
+</html>

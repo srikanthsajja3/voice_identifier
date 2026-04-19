@@ -7,6 +7,27 @@ from src.audio_utils import load_and_preprocess
 from src.model import create_model
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
 
+from sklearn.metrics import confusion_matrix
+import seaborn as sns
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+
+def plot_confusion_matrix(y_true, y_pred, classes, output_path="results/confusion_matrix.png"):
+    """
+    Generates and saves a confusion matrix heatmap.
+    """
+    cm = confusion_matrix(y_true, y_pred)
+    plt.figure(figsize=(10, 8))
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
+                xticklabels=classes, yticklabels=classes)
+    plt.title('Confusion Matrix')
+    plt.ylabel('True Label')
+    plt.xlabel('Predicted Label')
+    plt.tight_layout()
+    plt.savefig(output_path)
+    print(f"Confusion matrix saved to {output_path}")
+
 def train_project_model(data_dir, epochs=50):
     """
     MAX ACCURACY TRAINER: Processes all 8,732 UrbanSound8K samples.
@@ -87,6 +108,17 @@ def train_project_model(data_dir, epochs=50):
     plt.subplot(1, 2, 2); plt.plot(history.history['loss']); plt.plot(history.history['val_loss']); plt.title('Final Loss Curves'); plt.legend(['Train', 'Val'])
     plt.savefig("results/training_metrics.png")
     
+    # Generate Confusion Matrix
+    print("\nGenerating Confusion Matrix...")
+    y_val_pred = model.predict(X_val)
+    y_val_pred_classes = np.argmax(y_val_pred, axis=1)
+    
+    CLASSES = [
+        "air_conditioner", "car_horn", "children_playing", "dog_bark", 
+        "drilling", "engine_idling", "gun_shot", "jackhammer", "siren", "street_music"
+    ]
+    plot_confusion_matrix(y_val, y_val_pred_classes, CLASSES)
+
     print("\nSuccess! High-Accuracy model saved to models/urban_noise_xai_model.h5")
 
 if __name__ == "__main__":

@@ -3,7 +3,7 @@ import scipy.io.wavfile as wav
 import os
 
 def generate_synthetic_noise():
-    base_dir = "C:/Users/srika/Desktop/UrbanNoiseXAI/data"
+    base_dir = "./data"
     classes = ["air_conditioner", "car_horn", "children_playing", "dog_bark", 
                "drilling", "engine_idling", "gun_shot", "jackhammer", "siren", "street_music"]
     

@@ -32,6 +32,7 @@
         <div class="header">
             <h1>Urban Noise Intelligence</h1>
             <p>Classifying sources with Explainable AI & Trend Estimation</p>
+            <a href="/metrics" style="color: #38bdf8; text-decoration: none; font-size: 0.9em; font-weight: 600; border: 1px solid #38bdf8; padding: 5px 15px; border-radius: 20px; margin-top: 10px; display: inline-block;">View Model Metrics →</a>
         </div>
 
         <div class="grid">
@@ -53,7 +54,21 @@
                     <h3>Classification Result</h3>
                     <div id="prediction-text" style="font-size: 1.5em; color: #38bdf8;">---</div>
                     <div id="confidence-text" style="color: #94a3b8;">Confidence: 0%</div>
-                    <img id="explanation-img" src="" alt="XAI Explanation Heatmap">
+                    
+                    <div style="margin-top: 20px; text-align: left;">
+                        <p style="font-size: 0.8em; color: #94a3b8; margin-bottom: 5px;">Waveform (Time Domain)</p>
+                        <img id="waveform-img" style="width: 100%; height: 60px; border-radius: 4px; background: #0f172a; display: none;">
+                        
+                        <p style="font-size: 0.8em; color: #94a3b8; margin-bottom: 5px; margin-top: 10px;">Acoustic Features (MFCCs)</p>
+                        <img id="mfcc-img" style="width: 100%; height: 60px; border-radius: 4px; background: #0f172a; display: none;">
+                        
+                        <p style="font-size: 0.8em; color: #94a3b8; margin-bottom: 5px; margin-top: 10px;">CNN Attention (XAI Heatmap)</p>
+                        <img id="explanation-img" src="" alt="XAI Explanation Heatmap">
+                    </div>
+
+                    <div style="margin-top: 25px;">
+                        <canvas id="probChart" height="200"></canvas>
+                    </div>
                 </div>
             </div>
 
@@ -68,8 +83,8 @@
 
     <script>
         let audioContext;
-        let recorder;
         let chart;
+        let probChart;
 
         const recordBtn = document.getElementById('recordBtn');
         const status = document.getElementById('recording-status');
@@ -82,31 +97,41 @@
         };
 
         recordBtn.onclick = async () => {
-            recordBtn.disabled = true;
-            status.style.display = 'block';
-            
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 22050 });
-            const source = audioContext.createMediaStreamSource(stream);
-            const processor = audioContext.createScriptProcessor(4096, 1, 1);
-
-            let samples = [];
-            processor.onaudioprocess = (e) => {
-                samples.push(...e.inputBuffer.getChannelData(0));
-            };
-
-            source.connect(processor);
-            processor.connect(audioContext.destination);
-
-            setTimeout(async () => {
-                source.disconnect();
-                processor.disconnect();
-                status.style.display = 'none';
-                recordBtn.disabled = false;
+            try {
+                recordBtn.disabled = true;
+                status.style.display = 'block';
                 
-                const wavBlob = encodeWAV(samples, 22050);
-                uploadAudio(wavBlob);
-            }, 4000);
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 22050 });
+                const source = audioContext.createMediaStreamSource(stream);
+                const processor = audioContext.createScriptProcessor(4096, 1, 1);
+
+                let samples = [];
+                processor.onaudioprocess = (e) => {
+                    samples.push(...e.inputBuffer.getChannelData(0));
+                };
+
+                source.connect(processor);
+                processor.connect(audioContext.destination);
+
+                setTimeout(async () => {
+                    source.disconnect();
+                    processor.disconnect();
+                    status.style.display = 'none';
+                    recordBtn.disabled = false;
+                    
+                    const wavBlob = encodeWAV(samples, 22050);
+                    uploadAudio(wavBlob);
+                    
+                    // Stop all tracks to release microphone
+                    stream.getTracks().forEach(track => track.stop());
+                }, 4000);
+            } catch (err) {
+                console.error("Recording error:", err);
+                alert("Could not access microphone. Please ensure you are using a modern browser and have given permission.");
+                recordBtn.disabled = false;
+                status.style.display = 'none';
+            }
         };
 
         function encodeWAV(samples, sampleRate) {
@@ -147,16 +172,63 @@
             const formData = new FormData();
             formData.append('audio', blob, 'recording.wav');
 
-            const response = await fetch('/predict', { method: 'POST', body: formData });
-            const data = await response.json();
-            
-            document.getElementById('prediction-text').innerText = data.prediction;
-            document.getElementById('confidence-text').innerText = `Confidence: ${data.confidence}%`;
-            const img = document.getElementById('explanation-img');
-            img.src = data.explanation_url;
-            img.style.display = 'block';
+            try {
+                const response = await fetch('/predict', { method: 'POST', body: formData });
+                const data = await response.json();
+                
+                if (data.error) {
+                    alert("Error: " + data.error);
+                    return;
+                }
 
-            updateTrends(data.trends);
+                document.getElementById('prediction-text').innerText = data.prediction;
+                document.getElementById('confidence-text').innerText = `Confidence: ${data.confidence}%`;
+                
+                // Update images with cache busting
+                const timestamp = new Date().getTime();
+                
+                const wImg = document.getElementById('waveform-img');
+                wImg.src = data.waveform_url + "&t=" + timestamp;
+                wImg.style.display = 'block';
+
+                const mImg = document.getElementById('mfcc-img');
+                mImg.src = data.mfcc_url + "&t=" + timestamp;
+                mImg.style.display = 'block';
+
+                const img = document.getElementById('explanation-img');
+                img.src = data.explanation_url + "&t=" + timestamp;
+                img.style.display = 'block';
+
+                updateProbs(data.probs);
+                updateTrends(data.trends);
+            } catch (err) {
+                console.error("Upload error:", err);
+                document.getElementById('prediction-text').innerText = "Error";
+            }
+        }
+
+        function updateProbs(probs) {
+            const ctx = document.getElementById('probChart').getContext('2d');
+            if (probChart) probChart.destroy();
+            probChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: probs.map(p => p.label),
+                    datasets: [{
+                        label: 'Class Probability',
+                        data: probs.map(p => p.score),
+                        backgroundColor: '#38bdf8'
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    plugins: { legend: { display: false } },
+                    scales: { 
+                        x: { beginAtZero: true, max: 1, grid: { color: '#334155' } }, 
+                        y: { ticks: { color: '#f8fafc' }, grid: { display: false } } 
+                    }
+                }
+            });
         }
 
         function updateTrends(trends) {
@@ -174,7 +246,13 @@
                     labels: trends.map(t => t.label),
                     datasets: [{ label: '% Expected Increase', data: trends.map(t => t.value), backgroundColor: '#38bdf8' }]
                 },
-                options: { scales: { y: { beginAtZero: true, grid: { color: '#334155' } } } }
+                options: { 
+                    scales: { 
+                        y: { beginAtZero: true, grid: { color: '#334155' }, ticks: { color: '#f8fafc' } },
+                        x: { ticks: { color: '#f8fafc' } }
+                    },
+                    plugins: { legend: { labels: { color: '#f8fafc' } } }
+                }
             });
         }
     </script>
